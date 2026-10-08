@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '../../store/slices/authSlice';
@@ -14,10 +14,18 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isLocalhost, setIsLocalhost] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect');
   const dispatch = useDispatch();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      setIsLocalhost(hostname === 'localhost' || hostname === '127.0.0.1');
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     if (e) e.preventDefault();
@@ -51,7 +59,7 @@ function LoginForm() {
         else if (user.role === 'employer') router.push('/employer/dashboard');
         else router.push('/jobs');
       } else {
-        setError('Invalid email or password. Please verify your credentials or try a demo account.');
+        setError('Invalid email or password. Please verify your credentials.');
       }
     } catch (err) {
       setError('Cannot connect to backend server. Make sure Spring Boot is running on port 8080!');
@@ -149,40 +157,42 @@ function LoginForm() {
             </button>
           </form>
 
-          {/* Quick 1-Click Demo Accounts Switcher */}
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
-            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block text-center">
-              ⚡ 1-Click Demo Credentials:
-            </span>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => fillDemoAccount('alice@example.com', 'pass123')}
-                className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-center transition group shadow-sm"
-              >
-                <User className="w-4 h-4 text-blue-600 dark:text-blue-400 mx-auto mb-1 group-hover:scale-110" />
-                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 block">Job Seeker</span>
-              </button>
+          {/* Quick 1-Click Demo Accounts Switcher - ONLY visible on localhost, completely hidden on deployment */}
+          {isLocalhost && (
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block text-center">
+                ⚡ 1-Click Demo Credentials (Localhost Only):
+              </span>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => fillDemoAccount('alice@example.com', 'pass123')}
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-center transition group shadow-sm"
+                >
+                  <User className="w-4 h-4 text-blue-600 dark:text-blue-400 mx-auto mb-1 group-hover:scale-110" />
+                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 block">Job Seeker</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => fillDemoAccount('bob@techcorp.com', 'pass123')}
-                className="p-2 rounded-xl bg-slate-50 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-center transition group shadow-sm"
-              >
-                <Building2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 mx-auto mb-1 group-hover:scale-110" />
-                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 block">Employer</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => fillDemoAccount('bob@techcorp.com', 'pass123')}
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-center transition group shadow-sm"
+                >
+                  <Building2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 mx-auto mb-1 group-hover:scale-110" />
+                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 block">Employer</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => fillDemoAccount('admin@jobportal.com', 'admin123')}
-                className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-center transition group shadow-sm"
-              >
-                <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 mx-auto mb-1 group-hover:scale-110" />
-                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 block">Admin</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => fillDemoAccount('admin@jobportal.com', 'admin123')}
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-purple-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-center transition group shadow-sm"
+                >
+                  <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 mx-auto mb-1 group-hover:scale-110" />
+                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 block">Admin</span>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="text-center text-xs text-slate-500 dark:text-slate-400">
             Don't have an account?{' '}
