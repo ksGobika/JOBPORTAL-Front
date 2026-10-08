@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, Suspense, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
   MessageSquare, 
   Send, 
@@ -27,9 +28,11 @@ import {
   AlertCircle,
   X,
   Layers,
-  RefreshCw
+  RefreshCw,
+  Lock,
+  ArrowRight
 } from 'lucide-react';
-import { messageService, userService } from '../../services/api';
+import { messageService, userService, appService } from '../../services/api';
 
 // Realistic Web Audio Synthesis for message send & receive
 const playSound = (type) => {
@@ -93,6 +96,9 @@ function MessagesContent() {
   const fileInputRef = useRef(null);
   const prevMessagesCountRef = useRef(0);
 
+  const [appliedPartnerIdsState, setAppliedPartnerIdsState] = useState(new Set());
+  const [unauthorizedCompany, setUnauthorizedCompany] = useState(null);
+
   const scrollChatContainerOnly = () => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
@@ -119,7 +125,7 @@ function MessagesContent() {
     return () => clearInterval(timer);
   }, [activeCall]);
 
-  // Load all real companies, seekers, and messages directly from MySQL Database
+  // Load all real companies, seekers, and messages directly from MySQL Database with Application Filtering
   const loadConversations = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
@@ -144,37 +150,74 @@ function MessagesContent() {
         console.warn("Could not fetch database messages:", err);
       }
 
-      // 3. Identify all chat partners
-      // Filter out the logged-in user themselves AND filter out admin accounts (chat is strictly between Seekers & Employers)
-      let targetPartners = allDbUsers.filter(u => u.id !== currentUserId && u.email !== user?.email && u.role !== 'admin');
-
-      // If user is seeker: prioritize showing Employers
-      // If user is employer: prioritize showing Seekers
-      // Also include any user who has sent or received a message from current user
-      const messagedUserIds = new Set();
-      allDbMessages.forEach(m => {
-        if (m.senderId && m.senderId !== currentUserId) messagedUserIds.add(m.senderId);
-        if (m.receiverId && m.receiverId !== currentUserId) messagedUserIds.add(m.receiverId);
-      });
-
-      // Filter or sort partners
-      let sortedPartners = [...targetPartners];
-      if (currentUserRole === 'seeker') {
-        sortedPartners.sort((a, b) => {
-          if (a.role === 'employer' && b.role !== 'employer') return -1;
-          if (a.role !== 'employer' && b.role === 'employer') return 1;
-          return 0;
-        });
-      } else if (currentUserRole === 'employer') {
-        sortedPartners.sort((a, b) => {
-          if (a.role === 'seeker' && b.role !== 'seeker') return -1;
-          if (a.role !== 'seeker' && b.role === 'seeker') return 1;
-          return 0;
-        });
+      // 3. Fetch applications to know which companies / seekers are connected
+      let applications = [];
+      try {
+        if (currentUserRole === 'seeker') {
+          const appRes = await appService.getApplicationsByUserId(currentUserId);
+          applications = Array.isArray(appRes.data) ? appRes.data : [];
+        } else if (currentUserRole === 'employer') {
+          const appRes = await appService.getApplicationsByEmployer(currentUserId);
+          applications = Array.isArray(appRes.data) ? appRes.data : [];
+        }
+      } catch (err) {
+        console.warn("Could not fetch applications for messaging filter:", err);
       }
 
-      // If database has newly registered companies, parse their details accurately
-      const convos = sortedPartners.map((partner) => {
+      // Extract set of applied partner IDs
+      const appliedPartnerIds = new Set();
+      applications.forEach(app => {
+        if (currentUserRole === 'seeker' && app.employerId) {
+          appliedPartnerIds.add(String(app.employerId));
+        } else if (currentUserRole === 'employer' && app.seekerId) {
+          appliedPartnerIds.add(String(app.seekerId));
+        }
+      });
+      setAppliedPartnerIdsState(appliedPartnerIds);
+
+      // Track any user with active message exchange
+      const messagedUserIds = new Set();
+      allDbMessages.forEach(m => {
+        if (m.senderId && m.senderId !== currentUserId) messagedUserIds.add(String(m.senderId));
+        if (m.receiverId && m.receiverId !== currentUserId) messagedUserIds.add(String(m.receiverId));
+      });
+
+      // 4. Filter chat partners strictly
+      // Filter out self and admin accounts
+      let targetPartners = [];
+      if (currentUserRole === 'seeker') {
+        // Job Seekers ONLY see employers/companies they have submitted an application to (or who messaged them)
+        targetPartners = allDbUsers.filter(u => 
+          u.id !== currentUserId && 
+          u.email !== user?.email && 
+          u.role === 'employer' && 
+          (appliedPartnerIds.has(String(u.id)) || messagedUserIds.has(String(u.id)))
+        );
+
+        // Check if direct recipient requested in URL query param is unapplied
+        if (directRecipientId && !appliedPartnerIds.has(String(directRecipientId)) && !messagedUserIds.has(String(directRecipientId))) {
+          const unappliedUser = allDbUsers.find(u => String(u.id) === String(directRecipientId));
+          setUnauthorizedCompany(unappliedUser || { name: 'This Employer' });
+        } else {
+          setUnauthorizedCompany(null);
+        }
+      } else if (currentUserRole === 'employer') {
+        // Employers ONLY see candidates who applied to their jobs (or who messaged them)
+        targetPartners = allDbUsers.filter(u => 
+          u.id !== currentUserId && 
+          u.email !== user?.email && 
+          u.role === 'seeker' && 
+          (appliedPartnerIds.has(String(u.id)) || messagedUserIds.has(String(u.id)))
+        );
+        setUnauthorizedCompany(null);
+      } else {
+        // Fallback for other users
+        targetPartners = allDbUsers.filter(u => u.id !== currentUserId && u.email !== user?.email && u.role !== 'admin');
+        setUnauthorizedCompany(null);
+      }
+
+      // Map partners to conversation threads
+      const convos = targetPartners.map((partner) => {
         let displayName = partner.name || 'Company Recruiter';
         let companyInfo = null;
 
@@ -195,8 +238,8 @@ function MessagesContent() {
         }
 
         const threadMessages = allDbMessages.filter(m => 
-          (m.senderId === currentUserId && m.receiverId === partner.id) ||
-          (m.senderId === partner.id && m.receiverId === currentUserId)
+          (String(m.senderId) === String(currentUserId) && String(m.receiverId) === String(partner.id)) ||
+          (String(m.senderId) === String(partner.id) && String(m.receiverId) === String(currentUserId))
         ).sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
 
         const lastMsgObj = threadMessages.length > 0 ? threadMessages[threadMessages.length - 1] : null;
@@ -244,7 +287,7 @@ function MessagesContent() {
           setMessages(updatedActive.messages);
         }
       } else if (directRecipientId) {
-        const target = convos.find(c => c.id === directRecipientId);
+        const target = convos.find(c => String(c.id) === String(directRecipientId));
         if (target) {
           setActiveChat(target);
           setMessages(target.messages || []);
@@ -499,9 +542,46 @@ function MessagesContent() {
                   );
                 })
               ) : (
-                <div className="p-8 text-center text-xs text-slate-400 flex flex-col items-center justify-center space-y-2">
-                  <AlertCircle className="w-6 h-6 text-slate-400" />
-                  <p>No registered users found in database.</p>
+                <div className="p-6 text-center space-y-3 flex flex-col items-center justify-center my-auto">
+                  {user?.role === 'seeker' ? (
+                    <>
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 shadow-xs">
+                        <Building2 className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-black text-slate-900">No Applied Companies Yet</h4>
+                        <p className="text-[11px] text-slate-500 leading-relaxed max-w-xs">
+                          You can chat directly with companies after applying to their open jobs.
+                        </p>
+                      </div>
+                      <Link
+                        href="/jobs"
+                        className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md transition hover:scale-105"
+                      >
+                        <span>Browse Jobs & Apply</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200 shadow-xs">
+                        <User className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-black text-slate-900">No Applicant Chats Yet</h4>
+                        <p className="text-[11px] text-slate-500 leading-relaxed max-w-xs">
+                          Candidates who apply to your active job listings will automatically appear here.
+                        </p>
+                      </div>
+                      <Link
+                        href="/employer/my-jobs"
+                        className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md transition hover:scale-105"
+                      >
+                        <span>Manage Job Postings</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -745,10 +825,50 @@ function MessagesContent() {
                 </div>
               </>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-400">
-                <MessageSquare className="w-12 h-12 text-slate-400 mb-3" />
-                <p className="text-sm font-semibold text-slate-900">Select a conversation</p>
-                <p className="text-xs text-slate-500 mt-1">Choose a company or candidate from the left panel.</p>
+              <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4 max-w-md mx-auto">
+                {unauthorizedCompany ? (
+                  <>
+                    <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 shadow-sm">
+                      <Lock className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h3 className="text-base font-black text-slate-900">
+                        Application Required to Message {unauthorizedCompany?.name || 'Recruiter'}
+                      </h3>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Job Seekers can start direct conversations with company recruiters after submitting an application for their job openings.
+                      </p>
+                    </div>
+                    <Link
+                      href="/jobs"
+                      className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold px-6 py-3 rounded-2xl shadow-lg shadow-blue-600/25 transition hover:scale-105"
+                    >
+                      <span>Explore Open Jobs & Apply</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 rounded-3xl bg-slate-100 text-slate-400 flex items-center justify-center border border-slate-200">
+                      <MessageSquare className="w-8 h-8" />
+                    </div>
+                    {user?.role === 'seeker' ? (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-black text-slate-900">Direct Recruiter Messenger</h3>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Select an applied company from the left panel to discuss your interview, screening, or application status.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-black text-slate-900">Candidate Talent Messenger</h3>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Select an applicant from the left panel to initiate interview scheduling and discussions.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
