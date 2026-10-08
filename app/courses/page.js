@@ -98,6 +98,18 @@ export default function CoursesPage() {
       return;
     }
 
+    // Employers & Admins are course providers, NOT enrolled students
+    if (user?.role === 'employer' || user?.role === 'admin') {
+      if (course?.courseUrl) {
+        let targetUrl = course.courseUrl.trim();
+        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+          targetUrl = 'https://' + targetUrl;
+        }
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
+
     setEnrollingId(course.id);
     const existing = enrollments.find(e => e.courseId === course.id);
 
@@ -295,6 +307,17 @@ export default function CoursesPage() {
                 </div>
               </div>
             )}
+            {mounted && isAuthenticated && user?.role === 'employer' && (
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-purple-500/30 rounded-2xl">
+                  <Layers className="w-7 h-7 text-purple-300" />
+                </div>
+                <div>
+                  <p className="text-2xl font-black">{courses.filter(c => c.employerId === user.id).length}</p>
+                  <p className="text-xs text-slate-300 font-semibold">Posted by Your Company</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -305,7 +328,7 @@ export default function CoursesPage() {
         <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/90 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             {/* Tabs */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-2xl self-start">
+            <div className="flex items-center bg-slate-100 p-1 rounded-2xl self-start gap-1">
               <button
                 onClick={() => setActiveTab('all')}
                 className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${
@@ -330,6 +353,16 @@ export default function CoursesPage() {
                   <Bookmark className="w-4 h-4" />
                   <span>My Enrolled ({enrollments.length})</span>
                 </button>
+              )}
+
+              {mounted && isAuthenticated && user?.role === 'employer' && (
+                <Link
+                  href="/employer/post-course"
+                  className="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>+ Post Course</span>
+                </Link>
               )}
             </div>
 
@@ -456,7 +489,32 @@ export default function CoursesPage() {
 
                   {/* Card Footer Actions */}
                   <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
-                    {isEnrolled ? (
+                    {mounted && (user?.role === 'employer' || user?.role === 'admin') ? (
+                      <div className="w-full flex items-center gap-2">
+                        <Link
+                          href={`/courses/${c.id}`}
+                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span>View Details</span>
+                        </Link>
+                        <button
+                          onClick={() => {
+                            if (c.courseUrl) {
+                              let targetUrl = c.courseUrl.trim();
+                              if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+                                targetUrl = 'https://' + targetUrl;
+                              }
+                              window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                            }
+                          }}
+                          className="p-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl transition border border-blue-200"
+                          title="Open External Website"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : isEnrolled ? (
                       <>
                         <div className="flex items-center space-x-2">
                           <button

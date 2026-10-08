@@ -67,7 +67,7 @@ export default function CourseDetailsPage({ params }) {
 
     setCourse(foundCourse);
 
-    if (isAuthenticated && user?.id) {
+    if (isAuthenticated && user?.id && user?.role === 'seeker') {
       try {
         const enrollRes = await enrollmentService.getEnrollmentStatus(courseId, user.id);
         const enrList = enrollRes.data || [];
@@ -89,6 +89,18 @@ export default function CourseDetailsPage({ params }) {
   const handleEnrollAndLaunch = async () => {
     if (!isAuthenticated) {
       router.push('/login');
+      return;
+    }
+
+    // Employers & Admins are course providers, NOT enrolled students
+    if (user?.role === 'employer' || user?.role === 'admin') {
+      if (course?.courseUrl) {
+        let targetUrl = course.courseUrl.trim();
+        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+          targetUrl = 'https://' + targetUrl;
+        }
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      }
       return;
     }
 
@@ -268,14 +280,34 @@ export default function CourseDetailsPage({ params }) {
             </div>
           </div>
 
-          <button
-            onClick={handleEnrollAndLaunch}
-            disabled={enrolling}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-blue-500/20 flex items-center gap-2"
-          >
-            <span>{isEnrolled ? "Open Course Website" : "Enroll & Start Course"}</span>
-            <ExternalLink className="w-4 h-4" />
-          </button>
+          {mounted && (user?.role === 'employer' || user?.role === 'admin') ? (
+            <div className="flex items-center gap-2">
+              {course.employerId === user?.id && (
+                <Link
+                  href="/employer/courses"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
+                >
+                  Manage My Courses
+                </Link>
+              )}
+              <button
+                onClick={handleEnrollAndLaunch}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-blue-500/20 flex items-center gap-2"
+              >
+                <span>Open Course Website</span>
+                <ExternalLink className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleEnrollAndLaunch}
+              disabled={enrolling}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-blue-500/20 flex items-center gap-2"
+            >
+              <span>{isEnrolled ? "Open Course Website" : "Enroll & Start Course"}</span>
+              <ExternalLink className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -330,47 +362,82 @@ export default function CourseDetailsPage({ params }) {
             </div>
           )}
 
-          {/* Enrollment & Action Launch Section */}
-          <div className="pt-6 border-t border-slate-100 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-blue-600" />
-                <h4 className="text-sm font-black text-blue-950">
-                  {isEnrolled ? "You are Enrolled in this Course" : "Ready to Start Learning?"}
-                </h4>
+          {/* Role-Specific Action Section: Seeker vs Employer */}
+          {mounted && (user?.role === 'employer' || user?.role === 'admin') ? (
+            <div className="pt-6 border-t border-slate-100 bg-slate-900 text-white p-6 sm:p-8 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Building className="w-5 h-5 text-blue-400" />
+                  <h4 className="text-sm font-black text-white">
+                    Course Provider View (Employer)
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-300 mt-1">
+                  Courses are hosted for Job Seekers to learn and upskill. Candidates can enroll and complete this course.
+                </p>
               </div>
-              <p className="text-xs text-blue-800/80 mt-1">
-                {isEnrolled 
-                  ? "Access the learning material on the host platform anytime." 
-                  : "Clicking Enroll will register your enrollment and send the course website link to your email."}
-              </p>
-            </div>
 
-            <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
-              {isEnrolled && (
+              <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
+                {course.employerId === user?.id && (
+                  <Link
+                    href="/employer/courses"
+                    className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition border border-white/20"
+                  >
+                    My Courses
+                  </Link>
+                )}
+
                 <button
-                  onClick={handleToggleComplete}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                    isCompleted 
-                      ? 'bg-emerald-600 text-white' 
-                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-                  }`}
+                  onClick={handleEnrollAndLaunch}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-blue-500/20 flex items-center gap-2"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>{isCompleted ? "Completed ✓" : "Mark as Completed"}</span>
+                  <span>Open Course Website</span>
+                  <ExternalLink className="w-4 h-4" />
                 </button>
-              )}
-
-              <button
-                onClick={handleEnrollAndLaunch}
-                disabled={enrolling}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-blue-500/20 flex items-center gap-2"
-              >
-                <span>{isEnrolled ? `Open on ${course.platform || 'Website'}` : "Enroll & Launch ↗"}</span>
-                <ExternalLink className="w-4 h-4" />
-              </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="pt-6 border-t border-slate-100 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-blue-600" />
+                  <h4 className="text-sm font-black text-blue-950">
+                    {isEnrolled ? "You are Enrolled in this Course" : "Ready to Start Learning?"}
+                  </h4>
+                </div>
+                <p className="text-xs text-blue-800/80 mt-1">
+                  {isEnrolled 
+                    ? "Access the learning material on the host platform anytime." 
+                    : "Clicking Enroll will register your enrollment and send the course website link to your email."}
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
+                {isEnrolled && (
+                  <button
+                    onClick={handleToggleComplete}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      isCompleted 
+                        ? 'bg-emerald-600 text-white' 
+                        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{isCompleted ? "Completed ✓" : "Mark as Completed"}</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleEnrollAndLaunch}
+                  disabled={enrolling}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition shadow-md shadow-blue-500/20 flex items-center gap-2"
+                >
+                  <span>{isEnrolled ? `Open on ${course.platform || 'Website'}` : "Enroll & Launch ↗"}</span>
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
