@@ -162,7 +162,8 @@ export default function RegisterPage() {
       }, 1500);
     } catch (err) {
       console.error("Registration error:", err);
-      setError('Registration failed. Please make sure MySQL and Spring Boot backend are running on port 8080.');
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || (err.response?.status === 409 ? 'An account with this email already exists.' : 'Registration failed. Please verify your details and try again.');
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
