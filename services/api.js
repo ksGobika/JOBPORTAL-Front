@@ -1,15 +1,21 @@
 import axios from 'axios';
 
 export const getApiBaseUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
-    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+  let url = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.trim() : '';
+  
+  if (url && !url.includes('localhost')) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+    return url.replace(/\/$/, '');
   }
+  
   if (typeof window !== 'undefined') {
     if (window.location.hostname.includes('railway.app') || window.location.hostname.includes('vercel.app')) {
       return 'https://jobportal-back-production.up.railway.app';
     }
   }
-  return (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, '');
+  return (url || 'http://localhost:8080').replace(/\/$/, '');
 };
 
 export const API_BASE_URL = getApiBaseUrl();
