@@ -56,7 +56,13 @@ export default function JobDetailPage({ params }) {
   const fetchJob = async () => {
     try {
       const res = await jobService.getJobById(id);
-      setJob(res.data);
+      const jobData = res.data;
+      if (jobData) {
+        const currentViews = (jobData.views || 0) + 1;
+        setJob({ ...jobData, views: currentViews });
+        // Increment view count in database
+        jobService.updateJob(id, { views: currentViews }).catch(() => {});
+      }
       
       // Check if saved
       if (user && user.savedJobs) {
@@ -516,7 +522,7 @@ export default function JobDetailPage({ params }) {
               </div>
               <div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-500 dark:text-slate-400">Job Views:</span>
-                <span className="font-bold text-blue-600 dark:text-blue-400">{job.views || 48} views</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400">{job.views || 0} views</span>
               </div>
               <div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-500 dark:text-slate-400">Hiring Status:</span>

@@ -51,7 +51,7 @@ export default function EmployerDashboard() {
         appService.getApplicationsByEmployer(user.id)
       ]);
 
-      const myJobs = (jobsRes.data || []).filter(j => j.employerId === user.id || !j.employerId);
+      const myJobs = (jobsRes.data || []).filter(j => j.employerId === user.id);
       setJobs(myJobs);
       setApplicants(appsRes.data || []);
     } catch (err) {

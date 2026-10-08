@@ -45,7 +45,7 @@ export default function EmployerMetricsPage() {
         appService.getApplicationsByEmployer(user.id)
       ]);
 
-      const myJobs = (jobsRes.data || []).filter(j => j.employerId === user.id || !j.employerId);
+      const myJobs = (jobsRes.data || []).filter(j => j.employerId === user.id);
       setJobs(myJobs);
       setApplicants(appsRes.data || []);
     } catch (err) {
@@ -55,7 +55,7 @@ export default function EmployerMetricsPage() {
     }
   };
 
-  const totalViews = jobs.reduce((acc, j) => acc + (j.views || 42), 0);
+  const totalViews = jobs.reduce((acc, j) => acc + (Number(j.views) || 0), 0);
   const totalApps = applicants.length;
   const conversionRate = totalViews > 0 ? ((totalApps / totalViews) * 100).toFixed(1) : '0.0';
 
@@ -122,8 +122,8 @@ export default function EmployerMetricsPage() {
             <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
               {loading ? "..." : totalViews}
             </span>
-            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/40 flex items-center gap-0.5">
-              <ArrowUpRight className="w-3 h-3" /> +24%
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              real-time views
             </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
@@ -292,7 +292,7 @@ export default function EmployerMetricsPage() {
               {jobs.length > 0 ? (
                 jobs.map((job) => {
                   const jobApps = applicants.filter(a => a.jobId === job.id).length;
-                  const jobViews = job.views || 36;
+                  const jobViews = Number(job.views) || 0;
                   const jobRate = jobViews > 0 ? ((jobApps / jobViews) * 100).toFixed(1) : '0.0';
                   const isLive = job.status === 'approved' || job.status === 'active';
 
